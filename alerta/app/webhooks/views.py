@@ -7,6 +7,7 @@ try:
 except ImportError:
     import json
 
+from os import environ
 from copy import copy
 from dateutil.parser import parse as parse_date
 from flask import g, request, jsonify
@@ -616,13 +617,25 @@ def newrelic():
         return jsonify(status="error", message="insert or update of New Relic alert failed"), 500
 
 
-def parse_grafana(alert, match):
+# Grafana severity mappings based on state.  We will lazily load this from
+# a JSON blob in the environment.
+_grafana_state_severity = None
 
-    if alert['state'] == 'alerting':
-        severity = 'major'
-    elif alert['state'] == 'ok':
-        severity = 'normal'
-    else:
+def parse_grafana(alert, match):
+    global _grafana_state_severity_map
+    if _grafana_state_severity is None:
+        try:
+            _grafana_state_severity = json.loads(
+                    environ['GRAFANA_WEBOOK_STATE_SEVERITY'])
+        except KeyError:
+            _grafana_state_severity = {
+                    'alerting': 'critical',
+                    'ok':       'normal',
+            }
+
+    try:
+        severity = _grafana_state_severity[alert['state']]
+    except KeyError:
         severity = 'indeterminate'
 
     attributes = {
