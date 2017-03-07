@@ -622,7 +622,7 @@ def newrelic():
 _grafana_state_severity = None
 
 def parse_grafana(alert, match):
-    global _grafana_state_severity_map
+    global _grafana_state_severity
     if _grafana_state_severity is None:
         try:
             _grafana_state_severity = json.loads(
