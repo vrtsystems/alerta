@@ -646,19 +646,26 @@ def parse_grafana(alert, match):
     if 'imageUrl' in alert:
         attributes['imageUrl'] = '<a href="%s" target="_blank">Image</a>' % alert['imageUrl']
 
+    # Pull out some other defaults from the environment.
+    service=environ.get('GRAFANA_WEBHOOK_SERVICE_NAME', 'Grafana')
+    origin=environ.get('GRAFANA_WEBHOOK_SERVICE_ORIGIN', service)
+    environment=environ.get('GRAFANA_WEBHOOK_ENVIRONMENT', 'Production')
+    group=environ.get('GRAFANA_WEBHOOK_GROUP', 'Performance')
+    event_type=environ.get('GRAFANA_WEBHOOK_EVENT_TYPE', 'performanceAlert')
+
     return Alert(
         resource=match['metric'],
         event=alert['ruleName'],
-        environment='Production',
+        environment=environment,
         severity=severity,
-        service=['Grafana'],
-        group='Performance',
+        service=[service],
+        group=group,
         value='%s' % match['value'],
         text=alert.get('message', None) or alert.get('title', alert['state']),
         tags=match.get('tags', []),
         attributes=attributes,
-        origin='Grafana',
-        event_type='performanceAlert',
+        origin=origin,
+        event_type=event_type,
         timeout=300,
         raw_data=alert
     )
