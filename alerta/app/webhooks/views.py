@@ -7,6 +7,7 @@ try:
 except ImportError:
     import json
 
+from os import environ
 from copy import copy
 from dateutil.parser import parse as parse_date
 from flask import g, request, jsonify
@@ -616,13 +617,25 @@ def newrelic():
         return jsonify(status="error", message="insert or update of New Relic alert failed"), 500
 
 
-def parse_grafana(alert, match):
+# Grafana severity mappings based on state.  We will lazily load this from
+# a JSON blob in the environment.
+_grafana_state_severity = None
 
-    if alert['state'] == 'alerting':
-        severity = 'major'
-    elif alert['state'] == 'ok':
-        severity = 'normal'
-    else:
+def parse_grafana(alert, match):
+    global _grafana_state_severity
+    if _grafana_state_severity is None:
+        try:
+            _grafana_state_severity = json.loads(
+                    environ['GRAFANA_WEBOOK_STATE_SEVERITY'])
+        except KeyError:
+            _grafana_state_severity = {
+                    'alerting': 'critical',
+                    'ok':       'normal',
+            }
+
+    try:
+        severity = _grafana_state_severity[alert['state']]
+    except KeyError:
         severity = 'indeterminate'
 
     attributes = {
@@ -633,19 +646,26 @@ def parse_grafana(alert, match):
     if 'imageUrl' in alert:
         attributes['imageUrl'] = '<a href="%s" target="_blank">Image</a>' % alert['imageUrl']
 
+    # Pull out some other defaults from the environment.
+    service=environ.get('GRAFANA_WEBHOOK_SERVICE_NAME', 'Grafana')
+    origin=environ.get('GRAFANA_WEBHOOK_SERVICE_ORIGIN', service)
+    environment=environ.get('GRAFANA_WEBHOOK_ENVIRONMENT', 'Production')
+    group=environ.get('GRAFANA_WEBHOOK_GROUP', 'Performance')
+    event_type=environ.get('GRAFANA_WEBHOOK_EVENT_TYPE', 'performanceAlert')
+
     return Alert(
         resource=match['metric'],
         event=alert['ruleName'],
-        environment='Production',
+        environment=environment,
         severity=severity,
-        service=['Grafana'],
-        group='Performance',
+        service=[service],
+        group=group,
         value='%s' % match['value'],
         text=alert.get('message', None) or alert.get('title', alert['state']),
         tags=match.get('tags', []),
         attributes=attributes,
-        origin='Grafana',
-        event_type='performanceAlert',
+        origin=origin,
+        event_type=event_type,
         timeout=300,
         raw_data=alert
     )
